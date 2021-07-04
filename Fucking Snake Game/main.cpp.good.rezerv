@@ -1,0 +1,210 @@
+#include "Arial28x28.h"
+#include "ILI9486.h"
+#include "map_constrain.h"
+#include "mbed.h"
+#include <vector>
+const int DisplayResolution_x = 320;
+const int DisplayResolution_y = 480;
+
+PinName buspins[8] = {D8, D9, D2, D3, D4, D5, D6, D7};
+ILI9486 TFTLCD(BUS_8, buspins, A3, A4, A2, A1, A0, "TFTLCD");
+
+DigitalIn UpButton(PC_2, PullDown), DownButton(PC_3, PullDown),
+    LeftButton(PH_0, PullDown), RightButton(PH_1, PullDown);
+
+unsigned short BackgroundColor = Cyan;
+unsigned short SnakeColor = Yellow;
+
+enum SnakeHeadMovingDirections { Up, Down, Left, Right };
+
+class GameObject {
+public:
+  virtual void appear(int _x, int _y) {}
+
+  virtual void move(int next_x, int next_y) {}
+
+  virtual int getScore() { return score; }
+
+  virtual int getPositionX() { return x; }
+
+  virtual int getPositionY() { return y; }
+
+protected:
+  TFT *Display;
+  int x = 0;
+  int y = 0;
+  int score = 0;
+  int size = 0;
+  unsigned short color = 0; // Dislpay's lib color
+};
+
+class Snake : public GameObject {
+public:
+  Snake(TFT *Display, int _color, int _body_segment_size,
+        unsigned short _background_colour, float _speed, int _disp_res_x,
+        int _disp_res_y) {
+    speed = _speed;
+    color = _color;
+    background_colour = _background_colour;
+
+    disp_res_x = _disp_res_x;
+    disp_res_y = _disp_res_y;
+
+    Segment seg;
+    seg.setSegmentSize(_body_segment_size);
+    seg.setBackgroundColour(_background_colour);
+    seg.setDisplay(Display);
+    for (int n = 0; n <= segments_quantity; n++) {
+      segments.push_back(seg);
+    }
+  }
+  void appear(int _x, int _y) override { // To reworks
+    x = _x;
+    y = _y;
+    int temp_draw_x = x;
+    for (int n = 0; n < segments_quantity; n++) {
+      temp_draw_x -= segments[n].getSegmentSize();
+      segments[n].draw_segment(temp_draw_x, y, color);
+    }
+  }
+
+  void move(int direction_x, int direction_y) override { // in process
+    int seg_size = segments[0].getSegmentSize();
+
+    // checking for crocing borders
+    if (x >= disp_res_x) {
+      x = 0;
+    } else if (x < 0) {
+      x = disp_res_x;
+    }
+    if (y >= disp_res_y) {
+      y = 0;
+    } else if (y < 0) {
+      y = disp_res_y;
+    }
+    int size = segments[0].getSegmentSize();
+
+    x += direction_x * seg_size;
+    y += direction_y * seg_size;
+
+    segments[0].draw_segment(x, y, color);
+
+    for (int n = 1; n < segments_quantity;
+         n++) { // checking head/body colissions
+      if (x == segments[n].getPositionX() && x == segments[n].getPositionY()) {
+        GameOver();
+      }
+    }
+
+    for (int segment_number = 1; segment_number < segments_quantity;
+         segment_number++) {
+      int previous_segment =
+          previous_element(segment_number, segments_quantity);
+      segments[segment_number].draw_segment(
+          segments[previous_segment].getPreviousPositionX(),
+          segments[previous_segment].getPreviousPositionY(), color);
+    }
+    thread_sleep_for(int((1 / speed) * 1000));
+  }
+
+protected:
+  class Segment : public GameObject {
+  public:
+    Segment() {}
+    void draw_segment(int _x, int _y, unsigned short _color) {
+      int half_body_segment_size = body_segment_size / 2;
+      previous_x = x;
+      previous_y = y;
+      Display->fillrect(x - half_body_segment_size, y - half_body_segment_size,
+                        x + half_body_segment_size, y + half_body_segment_size,
+                        background_colour);
+      x = _x;
+      y = _y;
+
+      Display->fillrect(x - half_body_segment_size, y - half_body_segment_size,
+                        x + half_body_segment_size, y + half_body_segment_size,
+                        _color);
+    }
+
+    void setSegmentSize(int _body_segment_size) {
+      body_segment_size = _body_segment_size;
+    }
+
+    void setBackgroundColour(unsigned short colour) {
+      background_colour = colour;
+    }
+
+    void setDisplay(TFT *_Display) { Display = _Display; }
+
+    int getSegmentSize() { return body_segment_size; }
+
+    int getPreviousPositionX() { return previous_x; }
+
+    int getPreviousPositionY() { return previous_y; }
+
+  private:
+    int body_segment_size = 10; // by deffault
+    unsigned short background_colour;
+    int previous_x;
+    int previous_y;
+  };
+
+private:
+  void GameOver() { // TODO
+  }
+  vector<Segment> segments;
+  unsigned short background_colour = 0;
+  int segments_quantity = 6;
+  float speed = 1;
+  int disp_res_x, disp_res_y;
+};
+
+class Orb : public GameObject {
+  Orb(TFT *_Display, int _color, int _score, int _size) {
+    color = _color;
+    score = _score;
+    size = _size;
+    Display = _Display;
+  }
+  void appear(int _x, int _y) override {}
+};
+
+Snake MyFuckingSnake(&TFTLCD, SnakeColor, 10, BackgroundColor, 2,
+                     DisplayResolution_x, DisplayResolution_y);
+int main() {
+  TFTLCD.background(BackgroundColor);
+  TFTLCD.cls();
+  MyFuckingSnake.appear(160, 240);
+  int dir_x, dir_y;
+  int direction = Right;
+
+  while (true) {
+    if (UpButton.read() == 1) {
+      direction = Up;
+    } else if (DownButton.read() == 1) {
+      direction = Down;
+    } else if (LeftButton.read() == 1) {
+      direction = Left;
+    } else if (RightButton.read() == 1) {
+      direction = Right;
+    } else {
+    }
+
+    switch (direction) {
+    case Up:
+      MyFuckingSnake.move(0, -1);
+      break;
+    case Down:
+      MyFuckingSnake.move(0, 1);
+      break;
+    case Right:
+      MyFuckingSnake.move(1, 0);
+      break;
+    case Left:
+      MyFuckingSnake.move(-1, 0);
+      break;
+    default:
+      break;
+    }
+  }
+}

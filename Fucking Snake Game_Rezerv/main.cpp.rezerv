@@ -1,0 +1,102 @@
+#include "ILI9486.h"
+#include "Joystick.h"
+#include "map_constrain.h"
+#include "mbed.h"
+#include <vector>
+
+const int DisplayResolution_x = 320;
+const int DisplayResolution_y = 480;
+
+PinName buspins[8] = {D8, D9, D2, D3, D4, D5, D6, D7};
+ILI9486 TFTLCD(BUS_8, buspins, A3, A4, A2, A1, A0, "TFTLCD");
+
+Joystick SmallJoystick(PC_2, PC_3, PH_1);
+
+unsigned short BackgroundColor = Cyan;
+
+unsigned short SnakeColor = Yellow;
+
+class GameObject {
+public:
+  virtual void appear(int _x, int _y) = 0;
+
+  virtual void move(int next_x, int next_y) = 0;
+
+  int getScore() { return score; }
+
+  int getPositionX() { return x; }
+
+  int getPositionY() { return y; }
+
+protected:
+  int x = 0;
+  int y = 0;
+  int score = 0;
+  int size = 0;
+  unsigned short color = 0; // Dislpay's lib color
+};
+
+class Snake : public GameObject {
+public:
+  Snake(int _color, int body_segment_size, unsigned short background_colour) {
+    color = _color;
+    _background_colour = background_colour;
+    half_body_segment_size = body_segment_size / 2;
+  }
+
+  void appear(int _x, int _y) override {
+    previous_x = _x;
+    previous_y = _y;
+    for (int seg = 0; seg <= 4; seg++) {
+      draw_segment(_x + seg * half_body_segment_size*2, _y, color);
+    }
+  }
+
+  void move(int next_x, int next_y) override { // in process
+    if (next_x != previous_x || next_x != previous_x) {
+      int the_x = next_x;
+      for (int seg = 0; seg <= 4; seg++) {
+        draw_segment(previous_x + seg * half_body_segment_size*2, previous_y,
+                     _background_colour);
+        draw_segment(next_x + seg * half_body_segment_size*2, next_y, color);
+      }
+      previous_x = next_x;
+      previous_y = next_y;
+    } else {
+    }
+  }
+
+private:
+  void draw_segment(int _x, int _y, unsigned short _color) {
+    TFTLCD.fillrect(_x - half_body_segment_size, _y - half_body_segment_size,
+                    _x + half_body_segment_size, _y + half_body_segment_size,
+                    _color);
+  }
+  unsigned short _background_colour = 0;
+  int half_body_segment_size = 0;
+  int segments = 2;
+  int previous_x = 0;
+  int previous_y = 0;
+};
+
+class Orb : public GameObject {
+  Orb(int _color, int _score, int _size) {
+    color = _color;
+    score = _score;
+    size = _size;
+  }
+};
+
+Snake MyFuckingSnake(SnakeColor, 10, BackgroundColor);
+int main() {
+  TFTLCD.background(BackgroundColor);
+  TFTLCD.cls();
+  MyFuckingSnake.move(160, 240);
+  while (true) {
+    int position_x =
+        map(SmallJoystick.GetXValue() * 1000, 0, 1000, 0, DisplayResolution_x);
+    int position_y =
+        map(SmallJoystick.GetYValue() * 1000, 0, 1000, 0, DisplayResolution_y);
+    MyFuckingSnake.move(position_x, position_y);
+  }
+}

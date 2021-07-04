@@ -1,0 +1,140 @@
+#include "ILI9486.h"
+#include "map_constrain.h"
+#include "mbed.h"
+#include <vector>
+
+const int DisplayResolution_x = 320;
+const int DisplayResolution_y = 480;
+
+PinName buspins[8] = {D8, D9, D2, D3, D4, D5, D6, D7};
+ILI9486 TFTLCD(BUS_8, buspins, A3, A4, A2, A1, A0, "TFTLCD");
+
+DigitalIn UpButton(PC_2, PullDown), DownButton(PC_3, PullDown),
+    LeftButton(PH_1, PullDown), RightButton(PH_0, PullDown);
+
+unsigned short BackgroundColor = Cyan;
+unsigned short SnakeColor = Yellow;
+
+enum SnakeHeadMovingDirections { Up, Down, Left, Right };
+
+class GameObject {
+public:
+  virtual void appear(int _x, int _y) = 0;
+
+  virtual void move(int next_x, int next_y) = 0;
+
+  int getScore() { return score; }
+
+  int getPositionX() { return x; }
+
+  int getPositionY() { return y; }
+
+protected:
+  int x = 0;
+  int y = 0;
+  int score = 0;
+  int size = 0;
+  unsigned short color = 0; // Dislpay's lib color
+};
+
+class Snake : public GameObject {
+public:
+  Snake(int _color, int _body_segment_size, unsigned short _background_colour,
+        int _speed) {
+    color = _color;
+    background_colour = _background_colour;
+    half_body_segment_size = _body_segment_size / 2;
+  }
+
+  void appear(int _x, int _y) override {
+    previous_x = _x;
+    previous_y = _y;
+    next_x = previous_x;
+    next_y = previous_y;
+    for (int seg = 0; seg <= segments; seg++) {
+      draw_segment(_x + seg * half_body_segment_size * 2, _y,
+                   background_colour);
+    }
+  }
+
+  void move(int direction_x, int direction_y) override { // in process
+
+    for (int seg = 0; seg <= segments; seg++) {
+      draw_segment(next_x - seg * half_body_segment_size * 2 * direction_x,
+                   next_y - seg * half_body_segment_size * 2 * direction_y,
+                   color);
+    }
+    for (int seg = 0; seg <= segments; seg++) {
+      draw_segment(previous_x - seg * half_body_segment_size * 2 * direction_x,
+                   previous_y - seg * half_body_segment_size * 2 * direction_y,
+                   background_colour);
+    }
+    previous_x = next_x;
+    previous_y = next_y;
+    next_x += speed * direction_x;
+    next_y += speed * direction_y;
+  }
+
+private:
+  void draw_segment(int _x, int _y, unsigned short _color) {
+    TFTLCD.fillrect(_x - half_body_segment_size, _y - half_body_segment_size,
+                    _x + half_body_segment_size, _y + half_body_segment_size,
+                    _color);
+  }
+
+  unsigned short background_colour = 0;
+  int half_body_segment_size = 0;
+  int segments = 4;
+
+  int speed = 2;
+
+  int previous_x = 0;
+  int previous_y = 0;
+  int next_x;
+  int next_y;
+};
+
+class Orb : public GameObject {
+  Orb(int _color, int _score, int _size) {
+    color = _color;
+    score = _score;
+    size = _size;
+  }
+};
+
+Snake MyFuckingSnake(SnakeColor, 10, BackgroundColor, 2);
+int main() {
+  TFTLCD.background(BackgroundColor);
+  TFTLCD.cls();
+  MyFuckingSnake.appear(160, 240);
+  int dir_x, dir_y;
+  int direction = Right;
+
+  while (true) {
+    if (UpButton.read() == 1) {
+      direction = Up;
+    } else if (DownButton.read() == 1) {
+      direction = Down;
+    } else if (LeftButton.read() == 1) {
+      direction = Left;
+    } else if (RightButton.read() == 1) {
+      direction = Right;
+    } else {
+    }
+
+    switch (direction) {
+    case Up:
+      MyFuckingSnake.move(0, 1);
+      break;
+    case Down:
+      MyFuckingSnake.move(0, -1);
+      break;
+    case Right:
+      MyFuckingSnake.move(1, 0);
+      break;
+    case Left:
+      MyFuckingSnake.move(-1, 0);
+      break;
+    }
+  }
+}
