@@ -2,10 +2,6 @@
 #include "ILI9486.h"
 #include "map_constrain.h"
 #include "mbed.h"
-#include <cstdio>
-#include <cstdlib>
-#include <ctime>
-#include <string>
 #include <vector>
 
 const int DisplayResolution_x = 320;
